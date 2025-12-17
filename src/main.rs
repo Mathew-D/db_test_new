@@ -6,7 +6,7 @@ Program Details: Turso Database Test - Basic CRUD operations
 
 mod modules;
 
-use crate::modules::database::{create_database_client, create_messages_table, DatabaseTable};
+use crate::modules::database::{create_database_client, create_table_from_struct, DatabaseTable};
 use crate::modules::label::Label;
 use crate::modules::listview::ListView;
 use crate::modules::text_button::TextButton;
@@ -73,7 +73,7 @@ async fn main() {
     lbl_instructions.with_colors(GRAY, None);
 
     // Create table on startup
-    match create_messages_table(table_name).await {
+    match create_table_from_struct(table_name).await {
         Ok(_) => {
             status = format!("Table '{}' created/verified", table_name);
             should_fetch = true;

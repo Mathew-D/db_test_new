@@ -13,6 +13,32 @@ INITIAL SETUP:
 5. Get token: turso db tokens create my-db
 6. Update TURSO_URL and TURSO_AUTH_TOKEN below
 
+7. Add dependencies to Cargo.toml. Add these 2 lines to [dependencies]:
+
+   serde = { version = "1.0", features = ["derive"] }
+   serde_json = "1.0"
+
+   Then add these 2 new sections:
+
+   [target.'cfg(target_arch = "wasm32")'.dependencies]
+   wasm-bindgen = "0.2"
+   wasm-bindgen-futures = "0.4"
+   js-sys = "0.3"
+   web-sys = { version = "0.3", features = [
+       "Window",
+       "Request",
+       "RequestInit",
+       "RequestMode",
+       "Headers",
+       "Response",
+   ] }
+
+   [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+   ureq = { version = "2.9", features = ["json"] }
+
+8. To build for web: Use "Build: Web Output(Advanced)" option in the Dusome's extension.
+   This will compile to WebAssembly with the wasm32 dependencies above.
+
 ================================
 CUSTOMIZE YOUR DATABASE SCHEMA:
 ================================
@@ -34,7 +60,7 @@ CUSTOMIZE YOUR DATABASE SCHEMA:
      );
 
    Option B - Using the Rust API:
-     Update the create_messages_table() function below with your schema
+     Update the create_table_from_struct() function below with your schema
 
 3. Column type mapping:
    - INTEGER → i32, i64
@@ -49,23 +75,23 @@ USAGE EXAMPLES:
     let client = create_database_client();
     
     // Create table
-    create_messages_table("messages").await?;
+    create_table_from_struct("my_table").await?;
     
     // Fetch all records
-    let records: Vec<DatabaseTable> = client.fetch_table("messages").await?;
+    let records: Vec<DatabaseTable> = client.fetch_table("my_table").await?;
     
     // Insert a record (set id to 0 - auto-generated)
     let new_record = DatabaseTable { id: 0, text: "Hello".to_string() };
-    let id = client.insert_record("messages", &new_record).await?;
+    let id = client.insert_record("my_table", &new_record).await?;
     
     // Update a record
-    let count = client.update_record_by_id("messages", 1, "text", "Updated").await?;
+    let count = client.update_record_by_id("my_table", 1, "text", "Updated").await?;
     
     // Delete a record
-    let count = client.delete_record_by_id("messages", 1).await?;
+    let count = client.delete_record_by_id("my_table", 1).await?;
     
     // Custom SQL queries
-    client.execute_sql("SELECT * FROM messages WHERE id > 5").await?;
+    client.execute_sql("SELECT * FROM my_table WHERE id > 5").await?;
 */
 
 use serde::{Deserialize, Serialize};
@@ -122,11 +148,13 @@ pub fn create_turso_client(url: &str, token: &str) -> DatabaseClient {
     DatabaseClient::new(url.to_string(), token.to_string())
 }
 
-/// Create a table matching the DatabaseTable/DatabaseRow schema
-/// Update this if you change the struct columns above
+/// Create a table with custom name and schema
+/// The table name and columns are fully customizable
+/// Update this function if you want to change the table structure
 /// 
-/// Example for custom schema:
+/// Example for different schemas:
 /// ```
+/// // For users table:
 /// CREATE TABLE users (
 ///   id INTEGER PRIMARY KEY AUTOINCREMENT,
 ///   email TEXT NOT NULL UNIQUE,
@@ -134,9 +162,17 @@ pub fn create_turso_client(url: &str, token: &str) -> DatabaseClient {
 ///   active BOOLEAN DEFAULT 1,
 ///   score REAL
 /// )
+/// 
+/// // For products table:
+/// CREATE TABLE products (
+///   id INTEGER PRIMARY KEY AUTOINCREMENT,
+///   name TEXT NOT NULL,
+///   price REAL,
+///   in_stock BOOLEAN
+/// )
 /// ```
 #[allow(unused)]
-pub async fn create_messages_table(table_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn create_table_from_struct(table_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let client = create_database_client();
     let sql = format!(
         "CREATE TABLE IF NOT EXISTS {} (
