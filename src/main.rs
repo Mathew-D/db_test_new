@@ -41,8 +41,7 @@ fn update_listview(list_view: &mut ListView, messages: &Vec<DatabaseTable>) {
 async fn main() {
     let client = create_database_client();
     let table_name = "messages";
-    let mut messages: Vec<DatabaseTable> = Vec::new();
-    let mut status = String::from("");
+    let mut status = "Startup".to_string();
 
     // Text input for user to set text
     let mut txt_input = TextInput::new(15.0, 20.0, 350.0, 36.0, 22.0);
@@ -58,7 +57,7 @@ async fn main() {
     let btn_update = TextButton::new(640.0, 60.0, 120.0, 36.0, "Update", DARKGREEN, GREEN, 22);
     let mut list_view = ListView::new(&Vec::<String>::new(), 15.0, 70.0, 22);
     list_view.with_colors(WHITE, None, Some(DARKGRAY)).with_max_visible_items(20);
-    let mut lbl_status = Label::new(&status, 15.0, 60.0 + 22.0 * 20.0 + 10.0, 20);
+    let mut lbl_status = Label::new(&status, 380.0, 80.0, 20);
     lbl_status.with_colors(YELLOW, None);
 
     // Create table on startup
@@ -140,12 +139,9 @@ async fn main() {
         }
 
         // Draw UI
-
         lbl_status.set_text(&status);
         txt_input.draw();
         txt_delete_id.draw();
-
-        lbl_status.set_text(&status);
         lbl_status.draw();
         list_view.draw();
 
