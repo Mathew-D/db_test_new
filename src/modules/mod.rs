@@ -17,3 +17,4 @@ pub mod database;
 pub mod label;
 pub mod listview;
 pub mod text_button;
+pub mod text_input;
