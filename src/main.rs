@@ -1,7 +1,7 @@
 /*
-By: <Your Name Here>
+By: <Mahew Dusome>
 Date: 2025-12-17
-Program Details: Turso Database Test - Basic CRUD operations
+Program Details: Turso Database Test - Basic operations
 */
 
 mod modules;
