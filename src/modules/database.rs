@@ -1,6 +1,6 @@
 /*
 Made by: Mathew Dusome
-December 17 2025
+Mar 30 2026
 Turso (libSQL) database module for Rust
 
 ================================
@@ -35,8 +35,11 @@ INITIAL SETUP:
 
    [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
    ureq = { version = "2.9", features = ["json"] }
-
-8. To build for web: Use "Build: Web Output(Advanced)" option in the Dusome's extension.
+8. Add use statement:
+    use crate::modules::database::{create_database_client, create_table_from_struct, DatabaseTable};
+9. Add to mod.rs:
+    pub mod database;
+10. To build for web: Use "Build: Web Output(Advanced)" option in the Dusome's extension.
    This will compile to WebAssembly with the wasm32 dependencies above.
 
 ================================
@@ -72,6 +75,7 @@ CUSTOMIZE YOUR DATABASE SCHEMA:
 ================================
 USAGE EXAMPLES:
 ================================
+
 // NOTE: The table used in these examples is called 'messages'.
     let client = create_database_client();
 
