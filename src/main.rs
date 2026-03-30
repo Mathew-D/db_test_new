@@ -98,7 +98,16 @@ async fn main() {
         if btn_delete.click() {
             let id_text = txt_delete_id.get_text();
             if let Ok(id) = id_text.trim().parse::<i64>() {
-                if let Ok(_count) = client.delete_record_by_id(table_name, id).await {
+                let mut found = false;
+                if let Ok(records) = client.fetch_table(table_name).await {
+                    for record in records.iter() {
+                        if record.id == id as i32 {
+                            found = true;
+                        }
+                    }
+                }
+                if found {
+                    if let Ok(_count) = client.delete_record_by_id(table_name, id).await {}
                     if let Ok(records) = client.fetch_table(table_name).await {
                         update_listview(&mut list_view, &records);
                         status = format!("Deleted record with ID {}", id);
@@ -107,7 +116,7 @@ async fn main() {
                         status = "Fetch error after delete".to_string();
                     }
                 } else {
-                    status = format!("Delete error for ID {}", id);
+                    status = format!("Record with ID {} not found", id);
                 }
             } else {
                 status = "Enter a valid ID to delete".to_string();
@@ -120,7 +129,11 @@ async fn main() {
             let new_text = txt_input.get_text();
             if let Ok(id) = id_text.trim().parse::<i64>() {
                 if !new_text.trim().is_empty() {
-                    if let Ok(_count) = client.update_record_by_id(table_name, id, "text", &new_text).await {
+                    let updated_record = DatabaseTable {
+                        id: id as i32,
+                        text: new_text.clone(),
+                    };
+                    if let Ok(_updated_count) = client.update_record_by_struct("messages", &updated_record).await {
                         if let Ok(records) = client.fetch_table(table_name).await {
                             update_listview(&mut list_view, &records);
                             status = format!("Updated record with ID {}", id);
