@@ -1,8 +1,9 @@
 /*
 Made by: Mathew Dusome
-Mar 30 2026
+April 2 2026 
 Turso (libSQL) database module for Rust
 
+April 2: Dray52 Added fetch by id with examples
 ================================
 INITIAL SETUP:
 ================================
@@ -80,21 +81,33 @@ USAGE EXAMPLES:
 
     // Fetch all records (for display)
     let mut records: Vec<DatabaseTable> = Vec::new();
-    if let Ok(result) = client.fetch_table("messages").await {
+    let fetched_results = client.fetch_table("messages").await;
+    if let Ok(result) = fetched_results {
         records = result;
-        // To update a ListView with these records:
+       // To update a ListView with these records:
         // update_listview(&mut list_view, &records);
+        }
     } else {
-        // Handle error
+       println!("Error fetching records from database: {} ",fetched_results.err().unwrap());
     }
+
+     if let Ok(Some(record)) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
+                println!("Successfully fetched record from database.");
+      else if let Ok(None) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
+                println!("No record found with id {}", id);
+      } else if let Err(err) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
+                println!("Error fetching record from database: {}", err);
+      }
 
     // Insert a record (from user text input)
     let new_record = DatabaseTable { id: 0, text: "User entered text".to_string() };
-    if let Ok(id) = client.insert_record("messages", &new_record).await {
+    let insert_results =  client.insert_record("messages", &new_record).await;
+    if let Ok(id) = insert_results {
         // Inserted, id contains the new record's id
     } else {
-        // Handle error
+        println!("Error inserting records from database: {} ",insert_results.err().unwrap());
     }
+
 
     // Update a record by id (Can only do one column at a time with this method)
     if let Ok(updated_count) = client.update_record_by_id("messages", 5, "text", "New text").await {
@@ -146,7 +159,7 @@ use serde::{Deserialize, Serialize};
 fn is_zero(num: &i32) -> bool {
     *num == 0
 }
-
+// Please replace the libsql:// from the URL with https:
 pub const TURSO_URL: &str = "https://testing-mathew-d.aws-us-east-2.turso.io";
 pub const TURSO_AUTH_TOKEN: &str = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NjYwMDM3MzQsImlkIjoiYWJmN2VjMmQtNjI4Yy00NjQ1LTk5YWEtYjJlN2JkYmRlZjBiIiwicmlkIjoiMTc5YjVmZjktZTFlNC00YjdjLWIxYWQtMmJhYmMwOTBjNjhiIn0.BVSKprWC8aRNmi8oh6O8zHM7GsdF01d5miK3a95-UsljE6DtLk4U_iqJfHJkKA2CmvaBS706pes6I2RSUsBoCw";
 
@@ -237,8 +250,11 @@ pub struct DatabaseClient {
 }
 
 impl DatabaseClient {
-    /// Update all non-id fields of a DatabaseTable by id
-    #[allow(unused)]
+    pub fn new(base_url: String, auth_token: String) -> Self {
+        Self { base_url, auth_token }
+    }
+
+   #[allow(unused)]
     pub async fn update_record_by_struct(
         &self,
         table: &str,
@@ -265,10 +281,8 @@ impl DatabaseClient {
         );
         self.execute_sql(&sql).await
     }
-    pub fn new(base_url: String, auth_token: String) -> Self {
-        Self { base_url, auth_token }
-    }
 
+   
     #[allow(unused)]
     pub async fn fetch_table(&self, table: &str) -> Result<Vec<DatabaseTable>, Box<dyn std::error::Error>> {
         let sql = format!("SELECT * FROM {} ORDER BY id", table);
@@ -301,44 +315,30 @@ impl DatabaseClient {
         let json = serde_json::to_value(record)?;
         let obj = json.as_object().ok_or("Record must be an object")?;
 
-        let columns: Vec<&str> = obj
-            .keys()
-            .filter(|k| *k != "id")
-            .map(|s| s.as_str())
-            .collect();
+        let columns: Vec<&str> = obj.keys().filter(|k| *k != "id").map(|s| s.as_str()).collect();
 
-        let values: Vec<String> = obj
-            .iter()
-            .filter(|(k, _)| *k != "id")
-            .map(|(_, v)| self.value_to_sql(v))
-            .collect();
+        let values: Vec<String> = obj.iter().filter(|(k, _)| *k != "id").map(|(_, v)| self.value_to_sql(v)).collect();
 
-        let sql = format!(
-            "INSERT INTO {} ({}) VALUES ({})",
-            table,
-            columns.join(", "),
-            values.join(", ")
-        );
+        let sql = format!("INSERT INTO {} ({}) VALUES ({})", table, columns.join(", "), values.join(", "));
 
         let response = self.execute_query(&sql).await?;
         self.extract_last_insert_id(&response)
     }
-
     #[allow(unused)]
-    pub async fn update_record_by_id(
-        &self,
-        table: &str,
-        id: i64,
-        column: &str,
-        value: &str,
-    ) -> Result<i64, Box<dyn std::error::Error>> {
-        let sql = format!(
-            "UPDATE {} SET {} = '{}' WHERE id = {}",
-            table,
-            column,
-            value.replace("'", "''"),
-            id
-        );
+       pub async fn fetch_record_by_id<T>(&self, table: &str, id: i64) -> Result<Option<T>, Box<dyn std::error::Error>>
+       where
+           T: for<'de> Deserialize<'de>,
+       {
+           // Returns the full row for the given id.
+           // Call this with `DatabaseTable` to access fields like `movie_name`.
+           // limit 1 says send at most 1 row.
+           let sql = format!("SELECT * FROM {} WHERE id = {} LIMIT 1", table, id);
+           let mut results = self.fetch_with_sql(&sql).await?;
+           Ok(results.pop())
+       }
+    #[allow(unused)]
+    pub async fn update_record_by_id(&self, table: &str, id: i64, column: &str, value: &str) -> Result<i64, Box<dyn std::error::Error>> {
+        let sql = format!("UPDATE {} SET {} = '{}' WHERE id = {}", table, column, value.replace("'", "''"), id);
         self.execute_sql(&sql).await
     }
 
@@ -385,10 +385,7 @@ impl DatabaseClient {
             .and_then(|resp| resp.get("result"))
             .ok_or("Invalid response structure")?;
 
-        let rows = result
-            .get("rows")
-            .and_then(|r| r.as_array())
-            .ok_or("No rows in response")?;
+        let rows = result.get("rows").and_then(|r| r.as_array()).ok_or("No rows in response")?;
 
         let mut tables = Vec::new();
         for row in rows {
@@ -449,18 +446,14 @@ impl DatabaseClient {
             .ok_or("Invalid response structure")?;
 
         let result_obj = result.as_object().ok_or("Result is not an object")?;
-        
+
         // Get columns array
         let columns = match result_obj.get("cols").and_then(|c| c.as_array()) {
             Some(cols) => cols,
             None => return Ok(Vec::new()), // No columns means no data
         };
 
-        let rows = result_obj
-            .get("rows")
-            .and_then(|r| r.as_array())
-            .map(|r| r.clone())
-            .unwrap_or_default();
+        let rows = result_obj.get("rows").and_then(|r| r.as_array()).map(|r| r.clone()).unwrap_or_default();
 
         let mut records = Vec::new();
 
@@ -472,30 +465,35 @@ impl DatabaseClient {
                 if let Some(col_obj) = col_info.as_object() {
                     if let Some(col_name) = col_obj.get("name").and_then(|n| n.as_str()) {
                         if let Some(cell) = row_array.get(i) {
-                            // Cell format: {"type": "...", "value": "..."}
-                            if let Some(value_str) = cell.get("value").and_then(|v| v.as_str()) {
-                                // Get the decltype to determine how to parse the value
-                                let decltype = col_obj.get("decltype").and_then(|dt| dt.as_str()).unwrap_or("");
-                                
-                                // Convert string value to appropriate JSON type based on decltype
-                                let json_value = if decltype.to_uppercase().contains("INT") {
-                                    // Try to parse as integer
-                                    match value_str.parse::<i64>() {
-                                        Ok(i) => serde_json::json!(i),
-                                        Err(_) => serde_json::Value::String(value_str.to_string())
-                                    }
-                                } else if decltype.to_uppercase().contains("REAL") || decltype.to_uppercase().contains("FLOAT") {
-                                    // Try to parse as float
-                                    match value_str.parse::<f64>() {
-                                        Ok(f) => serde_json::json!(f),
-                                        Err(_) => serde_json::Value::String(value_str.to_string())
+                            // Cell format: {"type": "...", "value": ...}
+                            if let Some(value) = cell.get("value") {
+                                let json_value = if value.is_null() {
+                                    serde_json::Value::Null
+                                } else if let Some(value_str) = value.as_str() {
+                                    // Get the decltype to determine how to parse the value
+                                    let decltype = col_obj.get("decltype").and_then(|dt| dt.as_str()).unwrap_or("");
+
+                                    // Convert string value to appropriate JSON type based on decltype
+                                    if decltype.to_uppercase().contains("INT") {
+                                        match value_str.parse::<i64>() {
+                                            Ok(i) => serde_json::json!(i),
+                                            Err(_) => serde_json::Value::String(value_str.to_string()),
+                                        }
+                                    } else if decltype.to_uppercase().contains("REAL") || decltype.to_uppercase().contains("FLOAT") {
+                                        match value_str.parse::<f64>() {
+                                            Ok(f) => serde_json::json!(f),
+                                            Err(_) => serde_json::Value::String(value_str.to_string()),
+                                        }
+                                    } else {
+                                        serde_json::Value::String(value_str.to_string())
                                     }
                                 } else {
-                                    // Keep as string for TEXT and other types
-                                    serde_json::Value::String(value_str.to_string())
+                                    value.clone()
                                 };
-                                
+
                                 obj.insert(col_name.to_string(), json_value);
+                            } else {
+                                obj.insert(col_name.to_string(), serde_json::Value::Null);
                             }
                         }
                     }
@@ -520,7 +518,8 @@ impl DatabaseClient {
             .and_then(|r| r.get("response"))
             .and_then(|resp| resp.get("result"))
             .and_then(|result| {
-                result.get("affected_row_count")
+                result
+                    .get("affected_row_count")
                     .or_else(|| result.get("changes"))
                     .or_else(|| result.get("rows_affected"))
                     .and_then(|n| n.as_i64())
@@ -554,14 +553,14 @@ impl DatabaseClient {
             if let Some(last_id) = result_obj.get("last_row_id").and_then(|n| n.as_i64()) {
                 return Ok(last_id);
             }
-            
+
             // If neither field exists, try to use affected_row_count
             if let Some(affected) = result_obj.get("affected_row_count").and_then(|n| n.as_i64()) {
                 if affected > 0 {
                     return Ok(1); // Insert was successful but ID unavailable, return 1 as placeholder
                 }
             }
-            
+
             return Err("Failed to get last insert ID from response".into());
         }
 
@@ -600,30 +599,21 @@ impl DatabaseClient {
             .map_err(|e| format!("Failed to set Content-Type: {:?}", e))?;
         opts.set_headers(&headers);
 
-        let req = Request::new_with_str_and_init(&url, &opts)
-            .map_err(|e| format!("Failed to build request: {:?}", e))?;
+        let req = Request::new_with_str_and_init(&url, &opts).map_err(|e| format!("Failed to build request: {:?}", e))?;
         let win = window().ok_or("Failed to get window")?;
         let resp_value = JsFuture::from(win.fetch_with_request(&req))
             .await
             .map_err(|e| format!("Fetch failed: {:?}", e))?;
-        let resp: Response = resp_value
-            .dyn_into()
-            .map_err(|e| format!("Failed to cast response: {:?}", e))?;
+        let resp: Response = resp_value.dyn_into().map_err(|e| format!("Failed to cast response: {:?}", e))?;
 
         if !resp.ok() {
             return Err(format!("HTTP error: {}", resp.status()).into());
         }
 
-        let text_promise = resp
-            .text()
-            .map_err(|e| format!("resp.text() failed: {:?}", e))?;
+        let text_promise = resp.text().map_err(|e| format!("resp.text() failed: {:?}", e))?;
 
-        let text_value = JsFuture::from(text_promise)
-            .await
-            .map_err(|e| format!("Failed to read text: {:?}", e))?;
-        text_value
-            .as_string()
-            .ok_or("Failed to convert to string".into())
+        let text_value = JsFuture::from(text_promise).await.map_err(|e| format!("Failed to read text: {:?}", e))?;
+        text_value.as_string().ok_or("Failed to convert to string".into())
     }
 
     #[allow(unused)]
@@ -638,12 +628,11 @@ impl DatabaseClient {
         match response {
             Ok(resp) => Ok(resp.into_string()?),
             Err(ureq::Error::Status(code, response)) => {
-                let error_body = response
-                    .into_string()
-                    .unwrap_or_else(|_| "Could not read error body".to_string());
+                let error_body = response.into_string().unwrap_or_else(|_| "Could not read error body".to_string());
                 Err(format!("HTTP {} error: {}", code, error_body).into())
             }
             Err(e) => Err(e.into()),
         }
     }
 }
+

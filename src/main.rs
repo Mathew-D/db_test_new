@@ -6,7 +6,7 @@ Program Details: Turso Database Test - Basic operations
 
 mod modules;
 
-use crate::modules::database::{create_database_client, create_table_from_struct, DatabaseTable};
+use crate::modules::database::{create_database_client, DatabaseTable};
 use crate::modules::label::Label;
 use crate::modules::listview::ListView;
 use crate::modules::text_button::TextButton;
@@ -60,8 +60,6 @@ async fn main() {
     let mut lbl_status = Label::new(&status, 380.0, 80.0, 20);
     lbl_status.with_colors(YELLOW, None);
 
-    // Create table on startup
-    let _ = create_table_from_struct(table_name).await;
 
     // Initial fetch
     if let Ok(records) = client.fetch_table(table_name).await {
