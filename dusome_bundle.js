@@ -1,11 +1,60 @@
-      // Database plugin for miniquad/wasm interop
+let clipboard_buffer = "";
+
+function clipboard_register_plugin(importObject) {
+    // ✅ COPY (put this back!)
+    importObject.env.mq_copy_to_clipboard = function(ptr, len) {
+        const text = new TextDecoder().decode(
+            new Uint8Array(wasm_memory.buffer, ptr, len)
+        );
+        navigator.clipboard.writeText(text);
+    };
+
+    // ✅ REQUEST paste (async)
+    importObject.env.mq_request_paste = async function() {
+    if (navigator.userAgent.includes("Firefox")) { return }
+
+    try {
+        clipboard_buffer = await navigator.clipboard.readText();
+    } catch {
+        clipboard_buffer = "";
+    }
+};
+
+    // ✅ LENGTH
+    importObject.env.mq_get_paste_len = function() {
+        return clipboard_buffer.length;
+    };
+
+    // ✅ FILL buffer (Rust allocates, JS writes)
+    importObject.env.mq_fill_paste_buffer = function(ptr) {
+        if (!clipboard_buffer) return;
+
+        const enc = new TextEncoder();
+        const bytes = enc.encode(clipboard_buffer);
+
+        new Uint8Array(wasm_memory.buffer, ptr, bytes.length).set(bytes);
+    };
+
+    // ✅ CLEAR
+    importObject.env.mq_clear_paste = function() {
+        clipboard_buffer = "";
+    };
+}
+
+window.clipboard_register_plugin = clipboard_register_plugin;
+miniquad_add_plugin({
+    name: "clipboard",
+    version: "0.1.0",
+    register_plugin: clipboard_register_plugin
+});
+
+// Database plugin for miniquad/wasm interop
 // Exposes mq_db_query for Rust to call via FFI
 
 let db_query_result_buffer = "";
 
 async function mq_db_query(ptr, len, url_ptr, url_len, token_ptr, token_len) {
     // WASM memory is expected to be available as wasm_memory
-    console.log("mq_db_query called with ptr", ptr, "len", len, "url_ptr", url_ptr, "url_len", url_len, "token_ptr", token_ptr, "token_len", token_len);
     try {
         const mem = wasm_memory.buffer;
         const decoder = new TextDecoder();
@@ -22,10 +71,9 @@ async function mq_db_query(ptr, len, url_ptr, url_len, token_ptr, token_len) {
             body
         });
         db_query_result_buffer = await resp.text();
-        console.log("mq_db_query result", db_query_result_buffer);
+    
     } catch (e) {
         db_query_result_buffer = JSON.stringify({ error: "fetch_failed", message: e && e.message ? e.message : String(e) });
-        console.error("mq_db_query fetch error", e);
     }
 }
 
@@ -44,7 +92,7 @@ function mq_db_query_clear_result() {
     db_query_result_buffer = "";
 }
 
-function register_plugin(importObject) {
+function db_register_plugin(importObject) {
     if (!importObject.env) importObject.env = {};
     importObject.env.mq_db_query = mq_db_query;
     importObject.env.mq_db_query_result_len = mq_db_query_result_len;
@@ -52,9 +100,9 @@ function register_plugin(importObject) {
     importObject.env.mq_db_query_clear_result = mq_db_query_clear_result;
 }
 
-window.register_plugin = window.register_plugin;
+window.db_register_plugin = window.db_register_plugin;
 miniquad_add_plugin({
     name: "database",
     version: "0.1.0",
-    register_plugin
+    register_plugin: db_register_plugin
 });

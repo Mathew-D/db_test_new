@@ -1,6 +1,6 @@
 /*
 Made by: Mathew Dusome
-April 2 2026
+April 2 2026 
 Turso (libSQL) database module for Rust
 
 April 2: Dray52 Added fetch by id with examples
@@ -8,40 +8,56 @@ April 2: Dray52 Added fetch by id with examples
 INITIAL SETUP:
 ================================
 1. Add to mod.rs: pub mod database;
-2. Add to main.rs: mod config_db;
-3. Sign up: https://turso.tech
-4. Create DB: turso db create my-db
-5. Get URL: turso db show my-db
-6. Get token: turso db tokens create my-db
-7. Update TURSO_URL and TURSO_AUTH_TOKEN in src/config_db.rs
+2. Sign up: https://turso.tech
+3. Create DB: turso db create my-db
+4. Get URL: turso db show my-db
+5. Get token: turso db tokens create my-db
+6. Update TURSO_URL and TURSO_AUTH_TOKEN below
 
-8. Add dependencies to Cargo.toml. Add these 2 lines to [dependencies]:
+7. Add dependencies to Cargo.toml. Add these 2 lines to [dependencies]:
 
    serde = { version = "1.0", features = ["derive"] }
    serde_json = "1.0"
 
    Then add these 2 new sections:
 
-   [target.'cfg(target_arch = "wasm32")'.dependencies]
-   wasm-bindgen = "0.2"
-   wasm-bindgen-futures = "0.4"
-   js-sys = "0.3"
-   web-sys = { version = "0.3", features = [
-       "Window",
-       "Request",
-       "RequestInit",
-       "RequestMode",
-       "Headers",
-       "Response",
-   ] }
-
    [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
    ureq = { version = "2.9", features = ["json"] }
-9. Add use statements:
-    use crate::config_db::DatabaseTable;
-    use crate::modules::database::{create_database_client, create_table_from_struct};
+   
+8. Add use statement:
+    use crate::modules::database::{create_database_client, DatabaseTable};
+9. Add to mod.rs:
+    pub mod database;
 10. To build for web: Use "Build: Web Output(Advanced)" option in the Dusome's extension.
-    This compiles to WebAssembly with the wasm32 dependencies above.
+   This will compile to WebAssembly with the wasm32 dependencies above.
+
+================================
+CUSTOMIZE YOUR DATABASE SCHEMA:
+================================
+1. Modify the DatabaseTable struct below
+   - Add/remove fields to match your table columns
+   - Use appropriate Rust types: i32 for INTEGER, String for TEXT, bool for BOOLEAN, f64 for REAL
+   - Keep id: i32 (0 for INSERT means auto-generate, populated with actual ID for SELECT)
+   - Use serde attributes for custom naming if needed
+
+2. Create your table in Turso (via CLI or SQL):
+   
+   Using Turso CLI:
+     turso db shell my-db
+     CREATE TABLE my_table (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       column1 TEXT NOT NULL,
+       column2 INTEGER,
+       ...
+     );
+
+ 
+3. Column type mapping:
+   - INTEGER → i32, i64
+   - TEXT → String
+   - REAL → f64
+   - BOOLEAN → bool
+   - NUMERIC → f64 or String
 
 ================================
 USAGE EXAMPLES:
@@ -50,35 +66,38 @@ USAGE EXAMPLES:
 // NOTE: The table used in these examples is called 'messages'.
     let client = create_database_client();
 
+
     // Fetch all records (for display)
     let mut records: Vec<DatabaseTable> = Vec::new();
     let fetched_results = client.fetch_table("messages").await;
     if let Ok(result) = fetched_results {
         records = result;
-        // To update a ListView with these records:
+       // To update a ListView with these records:
         // update_listview(&mut list_view, &records);
+        }
     } else {
-        // Error fetching records from database
+       println!("Error fetching records from database: {} ",fetched_results.err().unwrap());
     }
 
-    if let Ok(Some(record)) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
-        // Successfully fetched record from database.
-        macroquad::logging::info!("[wasm32] About to call mq_db_query FFI");
-        // No record found with id
-    } else if let Err(err) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
-        // Error fetching record from database
-    }
+     if let Ok(Some(record)) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
+                println!("Successfully fetched record from database.");
+      else if let Ok(None) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
+                println!("No record found with id {}", id);
+      } else if let Err(err) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
+                println!("Error fetching record from database: {}", err);
+      }
 
     // Insert a record (from user text input)
     let new_record = DatabaseTable { id: 0, text: "User entered text".to_string() };
-    let insert_results = client.insert_record("messages", &new_record).await;
+    let insert_results =  client.insert_record("messages", &new_record).await;
     if let Ok(id) = insert_results {
         // Inserted, id contains the new record's id
     } else {
-        // Error inserting records from database
+        println!("Error inserting records from database: {} ",insert_results.err().unwrap());
     }
 
-    // Update a record by id (can only do one column at a time with this method)
+
+    // Update a record by id (Can only do one column at a time with this method)
     if let Ok(updated_count) = client.update_record_by_id("messages", 5, "text", "New text").await {
         // updated_count is the number of records updated
     } else {
@@ -86,14 +105,14 @@ USAGE EXAMPLES:
     }
 
     // Update a record by struct (update all non-id fields)
-        macroquad::logging::info!("[wasm32] mq_db_query_result_len = {} after {} tries", result_len, tries);
+    let updated_record = DatabaseTable { id: 5, text: "Updated text".to_string() };
     if let Ok(updated_count) = client.update_record_by_struct("messages", &updated_record).await {
         // updated_count is the number of records updated
     } else {
         // Handle error
     }
 
-        macroquad::logging::info!("[wasm32] About to call mq_db_query_fill_result with len {}", result_len);
+    // Delete a record by id (from user id input)
     if let Ok(deleted_count) = client.delete_record_by_id("messages", 5).await {
         // deleted_count is the number of records deleted
     } else {
@@ -107,21 +126,61 @@ USAGE EXAMPLES:
         // Handle error
     }
 
+  // ---
     // Displaying records in a ListView:
-    // Where 'list_view' is your ListView instance and 'records' is the Vec<DatabaseTable> fetched from the database.
-    // Change the items.push! line to customize how each record is displayed in the list.
-    fn update_listview(list_view: &mut ListView, messages: &Vec<DatabaseTable>) {
-        list_view.clear();
-        let mut items: Vec<String> = Vec::new();
-        for (i, msg) in messages.iter().enumerate() {
-            items.push(format!("  {}: ID={}, Text={}", i + 1, msg.id, msg.text));
-        }
-        list_view.add_items(&items);
+    //Where 'list_view' is your ListView instance and 'records' is the Vec<DatabaseTable> fetched from the database.
+    //Change the items.push! line to customize how each record is displayed in the list.
+   
+   fn update_listview(list_view: &mut ListView, messages: &Vec<DatabaseTable>) {
+    list_view.clear();
+    let mut items: Vec<String> = Vec::new();
+    for (i, msg) in messages.iter().enumerate() {
+        items.push(format!("  {}: ID={}, Text={}", i + 1, msg.id, msg.text));
     }
+    list_view.add_items(&items);
+}
 */
 
-use crate::config_db::{DatabaseTable, TURSO_AUTH_TOKEN, TURSO_URL};
 use serde::{Deserialize, Serialize};
+
+// Helper function for serde to skip serializing id when it's 0
+fn is_zero(num: &i32) -> bool {
+    *num == 0
+}
+// Please replace the libsql:// from the URL with https:
+pub const TURSO_URL: &str = "https://testing-mathew-d.aws-us-east-2.turso.io";
+pub const TURSO_AUTH_TOKEN: &str = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NjYwMDM3MzQsImlkIjoiYWJmN2VjMmQtNjI4Yy00NjQ1LTk5YWEtYjJlN2JkYmRlZjBiIiwicmlkIjoiMTc5YjVmZjktZTFlNC00YjdjLWIxYWQtMmJhYmMwOTBjNjhiIn0.BVSKprWC8aRNmi8oh6O8zHM7GsdF01d5miK3a95-UsljE6DtLk4U_iqJfHJkKA2CmvaBS706pes6I2RSUsBoCw";
+
+
+// ============================================================================
+// CUSTOMIZE THIS STRUCT FOR YOUR DATABASE SCHEMA
+// ============================================================================
+
+/// Your database record struct - used for both INSERT and SELECT operations
+/// When inserting: set id to 0 (it will be auto-generated by the database)
+/// When fetching: id will be populated with the actual ID
+/// 
+/// Modify this struct to match your table columns:
+/// #[derive(Debug, Deserialize, Serialize, Clone)]
+/// pub struct DatabaseTable {
+///     #[serde(default, skip_serializing_if = "is_zero")]
+///     pub id: i32,
+///     pub email: String,
+///     pub age: i32,
+///     pub active: bool,
+///     pub score: f64,
+/// }
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct DatabaseTable {
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub id: i32,
+    pub text: String,
+    // Example: Add more fields like this:
+    // pub email: String,
+    // pub age: i32,
+    // pub active: bool,
+    // pub score: f64,
+}
 
 // ============================================================================
 // CONVENIENCE FUNCTIONS
@@ -507,11 +566,10 @@ impl DatabaseClient {
         }
     }
 
-    #[allow(unused)]
     #[cfg(target_arch = "wasm32")]
     async fn execute_query_web(&self, json_body: &str) -> Result<String, Box<dyn std::error::Error>> {
-            // No extra std imports needed for this FFI pattern
-use macroquad::prelude::next_frame;
+        // No extra std imports needed for this FFI pattern
+        use macroquad::prelude::next_frame;
         extern "C" {
             // JS async: mq_db_query(ptr, len, url_ptr, url_len, token_ptr, token_len)
             fn mq_db_query(ptr: *const u8, len: usize, url_ptr: *const u8, url_len: usize, token_ptr: *const u8, token_len: usize);
@@ -528,9 +586,12 @@ use macroquad::prelude::next_frame;
         // Call JS (async, but we must poll for result)
         unsafe {
             mq_db_query(
-                json_bytes.as_ptr(), json_bytes.len(),
-                url_bytes.as_ptr(), url_bytes.len(),
-                token_bytes.as_ptr(), token_bytes.len()
+                json_bytes.as_ptr(),
+                json_bytes.len(),
+                url_bytes.as_ptr(),
+                url_bytes.len(),
+                token_bytes.as_ptr(),
+                token_bytes.len(),
             );
         }
 
@@ -545,7 +606,7 @@ use macroquad::prelude::next_frame;
             }
             // No yield, just busy-wait
             tries += 1;
-        next_frame().await;
+            next_frame().await;
         }
         if result_len == 0 {
             return Err("No result from JS db_query (timeout or JS error)".into());
@@ -562,7 +623,6 @@ use macroquad::prelude::next_frame;
             Err(e) => Err(format!("UTF-8 conversion error in WASM db_query: {}", e).into()),
         }
     }
-
     #[allow(unused)]
     #[cfg(not(target_arch = "wasm32"))]
     async fn execute_query_native(&self, json_body: &str) -> Result<String, Box<dyn std::error::Error>> {

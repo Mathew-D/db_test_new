@@ -4,11 +4,10 @@ Date: 2026-03-30
 Program Details: Turso Database Test - Basic operations
 */
 
-mod config_db;
+
 mod modules;
 
-use crate::config_db::DatabaseTable;
-use crate::modules::database::create_database_client;
+use crate::modules::database::{create_database_client, DatabaseTable};
 use crate::modules::label::Label;
 use crate::modules::listview::ListView;
 use crate::modules::text_button::TextButton;
