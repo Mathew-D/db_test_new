@@ -511,7 +511,7 @@ impl DatabaseClient {
     #[cfg(target_arch = "wasm32")]
     async fn execute_query_web(&self, json_body: &str) -> Result<String, Box<dyn std::error::Error>> {
             // No extra std imports needed for this FFI pattern
-
+use macroquad::prelude::next_frame;
         extern "C" {
             // JS async: mq_db_query(ptr, len, url_ptr, url_len, token_ptr, token_len)
             fn mq_db_query(ptr: *const u8, len: usize, url_ptr: *const u8, url_len: usize, token_ptr: *const u8, token_len: usize);
@@ -536,7 +536,7 @@ impl DatabaseClient {
 
         // Poll for result (naive busy-wait, no async yield)
         let mut tries = 0;
-        let max_tries = 100000000; // Increase for slow JS
+        let max_tries = 100; // Increase for slow JS
         let mut result_len = 0;
         while tries < max_tries {
             result_len = unsafe { mq_db_query_result_len() };
@@ -545,6 +545,7 @@ impl DatabaseClient {
             }
             // No yield, just busy-wait
             tries += 1;
+        next_frame().await;
         }
         if result_len == 0 {
             return Err("No result from JS db_query (timeout or JS error)".into());
