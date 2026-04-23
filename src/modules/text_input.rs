@@ -6,9 +6,11 @@ Adds a text input object
 ================================================================================
 CLIPBOARD SUPPORT
 ================================================================================
-No WEB Support
 Ctrl+C, Ctrl+V, and Ctrl+X are implemented on windows, linux and macOS using system clipboard utilities
 (wl-copy/wl-paste for Wayland, xclip for X11, pbcopy/pbpaste for macOS, and clip/Get-Clipboard for Windows).
+Web support only for Chrome bassd browsers
+================================================================================
+
 Must add the following to Cargo.toml to enable clipboard support on desktop platforms:
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

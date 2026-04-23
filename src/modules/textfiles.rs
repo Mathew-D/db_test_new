@@ -5,16 +5,6 @@ Updated: December 17 2025
 To import you need:
 Adds TextFile functionality for cross-platform file operations
 
-For web support (WebAssembly) only:
-    add into Cargo.toml the following:
-        [target.'cfg(target_arch = "wasm32")'.dependencies]
-        gloo-storage = "0.3"
-        wasm-bindgen = "=0.2.106"
-
-
-        
-Used for Everything:
-
     In your mod.rs file located in the modules folder add the following to the end of the file
         pub mod textfiles;
         
