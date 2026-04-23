@@ -1,3 +1,41 @@
+// LocalStorage plugin for miniquad/wasm interop
+// Exposes js_local_storage_set and js_local_storage_get for Rust FFI
+let local_storage_result_buffer = "";
+
+function js_local_storage_set(key_ptr, key_len, value_ptr, value_len) {
+    const mem = wasm_memory.buffer;
+    const decoder = new TextDecoder();
+    const key = decoder.decode(new Uint8Array(mem, key_ptr, key_len));
+    const value = decoder.decode(new Uint8Array(mem, value_ptr, value_len));
+    localStorage.setItem(key, value);
+}
+
+function js_local_storage_get(key_ptr, key_len, out_ptr, out_len) {
+    const mem = wasm_memory.buffer;
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    const key = decoder.decode(new Uint8Array(mem, key_ptr, key_len));
+    const value = localStorage.getItem(key);
+    if (typeof value !== 'string') return 0;
+    const bytes = encoder.encode(value);
+    const len = Math.min(bytes.length, out_len);
+    new Uint8Array(mem, out_ptr, len).set(bytes.subarray(0, len));
+    return len;
+}
+
+function local_storage_register_plugin(importObject) {
+    if (!importObject.env) importObject.env = {};
+    importObject.env.js_local_storage_set = js_local_storage_set;
+    importObject.env.js_local_storage_get = js_local_storage_get;
+}
+
+window.local_storage_register_plugin = local_storage_register_plugin;
+miniquad_add_plugin({
+    name: "local_storage",
+    version: "0.1.0",
+    register_plugin: local_storage_register_plugin
+});
+
 let clipboard_buffer = "";
 
 function clipboard_register_plugin(importObject) {

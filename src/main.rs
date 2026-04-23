@@ -1,9 +1,9 @@
+use crate::modules::textfiles::TextFile;
 /*
 By: <Mahew Dusome>
 Date: 2026-03-30
 Program Details: Turso Database Test - Basic operations
 */
-
 
 mod modules;
 
@@ -40,6 +40,10 @@ fn update_listview(list_view: &mut ListView, messages: &Vec<DatabaseTable>) {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    // Add a button for TextFile test
+    // Add buttons for TextFile save/load test
+    let btn_textfile_save = TextButton::new(780.0, 20.0, 90.0, 36.0, "Save File", DARKGRAY, GRAY, 18);
+    let btn_textfile_load = TextButton::new(890.0, 20.0, 90.0, 36.0, "Load File", DARKGRAY, GRAY, 18);
     let client = create_database_client();
     let table_name = "messages";
     let mut status = "Startup".to_string();
@@ -60,7 +64,8 @@ async fn main() {
     list_view.with_colors(WHITE, None, Some(DARKGRAY)).with_max_visible_items(20);
     let mut lbl_status = Label::new(&status, 380.0, 80.0, 20);
     lbl_status.with_colors(YELLOW, None);
-
+    let mut lbl_file_status = Label::new("", 780.0, 260.0, 18);
+    lbl_file_status.with_colors(WHITE, None);
     // Initial fetch
     match client.fetch_table(table_name).await {
         Ok(records) => update_listview(&mut list_view, &records),
@@ -68,8 +73,36 @@ async fn main() {
     }
 
     loop {
-
         clear_background(BLACK);
+
+        // Handle TextFile Save button
+        if btn_textfile_save.click() {
+            let test_data = vec!["SDFAFDAF", "Bob", "Charlie"];
+            match TextFile::save_strings("test_names.txt", test_data).await {
+                Ok(_) => {
+                    status = "TextFile save OK".to_string();
+                    lbl_file_status.set_text("File saved successfully.");
+                }
+                Err(e) => {
+                    status = "TextFile save error".to_string();
+                    lbl_file_status.set_text(format!("Save error: {}", e));
+                }
+            }
+        }
+
+        // Handle TextFile Load button
+        if btn_textfile_load.click() {
+            match TextFile::load_strings("test_names.txt").await {
+                Ok(names) => {
+                    status = "TextFile load OK".to_string();
+                    lbl_file_status.set_text(format!("Loaded: {:?}", names));
+                }
+                Err(e) => {
+                    status = "TextFile load error".to_string();
+                    lbl_file_status.set_text(format!("Load error: {}", e));
+                }
+            }
+        }
 
         // Handle Add button
         if btn_add.click() {
@@ -150,11 +183,14 @@ async fn main() {
         }
 
         // Draw UI
+
         lbl_status.set_text(&status);
         txt_input.draw();
         txt_delete_id.draw();
+
         lbl_status.draw();
         list_view.draw();
+        lbl_file_status.draw();
 
         next_frame().await;
     }
