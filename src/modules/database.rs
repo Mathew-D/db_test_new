@@ -58,15 +58,15 @@ USAGE EXAMPLES:
         // To update a ListView with these records:
         // update_listview(&mut list_view, &records);
     } else {
-        println!("Error fetching records from database: {} ", fetched_results.err().unwrap());
+        // Error fetching records from database
     }
 
     if let Ok(Some(record)) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
-        println!("Successfully fetched record from database.");
-    } else if let Ok(None) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
-        println!("No record found with id {}", id);
+        // Successfully fetched record from database.
+        macroquad::logging::info!("[wasm32] About to call mq_db_query FFI");
+        // No record found with id
     } else if let Err(err) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
-        println!("Error fetching record from database: {}", err);
+        // Error fetching record from database
     }
 
     // Insert a record (from user text input)
@@ -75,7 +75,7 @@ USAGE EXAMPLES:
     if let Ok(id) = insert_results {
         // Inserted, id contains the new record's id
     } else {
-        println!("Error inserting records from database: {} ", insert_results.err().unwrap());
+        // Error inserting records from database
     }
 
     // Update a record by id (can only do one column at a time with this method)
@@ -86,14 +86,14 @@ USAGE EXAMPLES:
     }
 
     // Update a record by struct (update all non-id fields)
-    let updated_record = DatabaseTable { id: 5, text: "Updated text".to_string() };
+        macroquad::logging::info!("[wasm32] mq_db_query_result_len = {} after {} tries", result_len, tries);
     if let Ok(updated_count) = client.update_record_by_struct("messages", &updated_record).await {
         // updated_count is the number of records updated
     } else {
         // Handle error
     }
 
-    // Delete a record by id (from user id input)
+        macroquad::logging::info!("[wasm32] About to call mq_db_query_fill_result with len {}", result_len);
     if let Ok(deleted_count) = client.delete_record_by_id("messages", 5).await {
         // deleted_count is the number of records deleted
     } else {
@@ -510,40 +510,56 @@ impl DatabaseClient {
     #[allow(unused)]
     #[cfg(target_arch = "wasm32")]
     async fn execute_query_web(&self, json_body: &str) -> Result<String, Box<dyn std::error::Error>> {
-        use wasm_bindgen::JsCast;
-        use wasm_bindgen_futures::JsFuture;
-        use web_sys::{Headers, Request, RequestInit, RequestMode, Response, window};
+            // No extra std imports needed for this FFI pattern
 
-        let url = format!("{}/v2/pipeline", self.base_url);
-        let opts = RequestInit::new();
-        opts.set_method("POST");
-        opts.set_mode(RequestMode::Cors);
-        opts.set_body(&wasm_bindgen::JsValue::from_str(json_body));
-
-        let headers = Headers::new().map_err(|e| format!("Failed to create headers: {:?}", e))?;
-        headers
-            .append("Authorization", &format!("Bearer {}", self.auth_token))
-            .map_err(|e| format!("Failed to set Authorization: {:?}", e))?;
-        headers
-            .append("Content-Type", "application/json")
-            .map_err(|e| format!("Failed to set Content-Type: {:?}", e))?;
-        opts.set_headers(&headers);
-
-        let req = Request::new_with_str_and_init(&url, &opts).map_err(|e| format!("Failed to build request: {:?}", e))?;
-        let win = window().ok_or("Failed to get window")?;
-        let resp_value = JsFuture::from(win.fetch_with_request(&req))
-            .await
-            .map_err(|e| format!("Fetch failed: {:?}", e))?;
-        let resp: Response = resp_value.dyn_into().map_err(|e| format!("Failed to cast response: {:?}", e))?;
-
-        if !resp.ok() {
-            return Err(format!("HTTP error: {}", resp.status()).into());
+        extern "C" {
+            // JS async: mq_db_query(ptr, len, url_ptr, url_len, token_ptr, token_len)
+            fn mq_db_query(ptr: *const u8, len: usize, url_ptr: *const u8, url_len: usize, token_ptr: *const u8, token_len: usize);
+            fn mq_db_query_result_len() -> usize;
+            fn mq_db_query_fill_result(ptr: *mut u8);
+            fn mq_db_query_clear_result();
         }
 
-        let text_promise = resp.text().map_err(|e| format!("resp.text() failed: {:?}", e))?;
+        // Prepare buffers
+        let json_bytes = json_body.as_bytes();
+        let url_bytes = self.base_url.as_bytes();
+        let token_bytes = self.auth_token.as_bytes();
 
-        let text_value = JsFuture::from(text_promise).await.map_err(|e| format!("Failed to read text: {:?}", e))?;
-        text_value.as_string().ok_or("Failed to convert to string".into())
+        // Call JS (async, but we must poll for result)
+        unsafe {
+            mq_db_query(
+                json_bytes.as_ptr(), json_bytes.len(),
+                url_bytes.as_ptr(), url_bytes.len(),
+                token_bytes.as_ptr(), token_bytes.len()
+            );
+        }
+
+        // Poll for result (naive busy-wait, no async yield)
+        let mut tries = 0;
+        let max_tries = 100000000; // Increase for slow JS
+        let mut result_len = 0;
+        while tries < max_tries {
+            result_len = unsafe { mq_db_query_result_len() };
+            if result_len > 0 {
+                break;
+            }
+            // No yield, just busy-wait
+            tries += 1;
+        }
+        if result_len == 0 {
+            return Err("No result from JS db_query (timeout or JS error)".into());
+        }
+
+        // Read result
+        let mut buf = vec![0u8; result_len];
+        unsafe {
+            mq_db_query_fill_result(buf.as_mut_ptr());
+            mq_db_query_clear_result();
+        }
+        match String::from_utf8(buf) {
+            Ok(result) => Ok(result),
+            Err(e) => Err(format!("UTF-8 conversion error in WASM db_query: {}", e).into()),
+        }
     }
 
     #[allow(unused)]

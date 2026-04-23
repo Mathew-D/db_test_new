@@ -63,10 +63,9 @@ async fn main() {
     lbl_status.with_colors(YELLOW, None);
 
     // Initial fetch
-    if let Ok(records) = client.fetch_table(table_name).await {
-        update_listview(&mut list_view, &records);
-    } else {
-        status = "Fetch error on startup".to_string();
+    match client.fetch_table(table_name).await {
+        Ok(records) => update_listview(&mut list_view, &records),
+        Err(e) => status = format!("Fetch error on startup: {}", e),
     }
 
     loop {
