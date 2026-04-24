@@ -308,14 +308,26 @@ impl TextInput {
         (lines, mapping)
     }
 
-    /// Ensure the cursor index is always at a valid UTF-8 boundary and in bounds
-    fn ensure_cursor_validity(&mut self) {
+    /// Ensure the cursor index and selection anchor are always at a valid UTF-8 boundary and in bounds
+    fn ensure_indices_validity(&mut self) {
+        // Ensure cursor_index is valid
         if self.cursor_index > self.text.len() {
             self.cursor_index = self.text.len();
         }
         // Clamp to char boundary
         while self.cursor_index > 0 && !self.text.is_char_boundary(self.cursor_index) {
             self.cursor_index -= 1;
+        }
+
+        // Ensure selection_anchor is valid if it exists
+        if let Some(ref mut anchor) = self.selection_anchor {
+            if *anchor > self.text.len() {
+                *anchor = self.text.len();
+            }
+            // Clamp to char boundary
+            while *anchor > 0 && !self.text.is_char_boundary(*anchor) {
+                *anchor -= 1;
+            }
         }
     }
 
@@ -342,7 +354,7 @@ impl TextInput {
         if let Some((start, end)) = self.get_selection_range() {
             self.text.replace_range(start..end, "");
             self.cursor_index = start;
-            self.ensure_cursor_validity();
+            self.ensure_indices_validity();
             self.clear_selection();
             return true;
         }
@@ -555,7 +567,7 @@ impl TextInput {
     #[allow(unused)]
     pub fn set_text<T: Into<String>>(&mut self, text: T) -> &mut Self {
         self.text = self.apply_text_constraints(&text.into());
-        self.ensure_cursor_validity();
+        self.ensure_indices_validity();
         self.clear_selection();
         self
     }
@@ -755,7 +767,7 @@ impl TextInput {
     pub fn set_allowed_chars<T: Into<String>>(&mut self, allowed_chars: T) -> &mut Self {
         self.allowed_chars = Some(allowed_chars.into());
         self.text = self.apply_text_constraints(&self.text);
-        self.ensure_cursor_validity();
+        self.ensure_indices_validity();
         self
     }
 
@@ -810,7 +822,7 @@ impl TextInput {
                 let text_y = self.y + 5.0;
                 let new_cursor = self.index_from_local_point(mx - text_x, my - text_y);
                 self.cursor_index = new_cursor;
-                self.ensure_cursor_validity();
+                self.ensure_indices_validity();
                 self.selection_anchor = Some(self.cursor_index);
                 self.is_dragging_selection = true;
                 self.cursor_visible = true;
@@ -826,7 +838,7 @@ impl TextInput {
             let text_x = self.x + 5.0;
             let text_y = self.y + 5.0;
             self.cursor_index = self.index_from_local_point(mx - text_x, my - text_y);
-            self.ensure_cursor_validity();
+            self.ensure_indices_validity();
             self.cursor_visible = true;
             self.cursor_timer = 0.0;
         }
@@ -850,7 +862,7 @@ impl TextInput {
                 if is_key_pressed(KeyCode::A) {
                     self.selection_anchor = Some(0);
                     self.cursor_index = self.text.len();
-                    self.ensure_cursor_validity();
+                    self.ensure_indices_validity();
                     consumed_shortcut = true;
                 } else if is_key_pressed(KeyCode::C) {
                     // Copy to clipboard
@@ -898,7 +910,7 @@ impl TextInput {
                                 self.cursor_index += c.len_utf8();
                             }
                         }
-                        self.ensure_cursor_validity();
+                        self.ensure_indices_validity();
                         self.clear_selection();
                         consumed_shortcut = true;
                     }
@@ -923,7 +935,7 @@ impl TextInput {
                     if !c.is_control() && self.can_insert_char(c) {
                         self.text.insert(self.cursor_index, c);
                         self.cursor_index += c.len_utf8();
-                        self.ensure_cursor_validity();
+                        self.ensure_indices_validity();
                         self.clear_selection();
                     }
                 }
@@ -935,7 +947,7 @@ impl TextInput {
             if self.multiline && is_key_pressed(KeyCode::Enter) && self.can_insert_char('\n') {
                 self.text.insert(self.cursor_index, '\n');
                 self.cursor_index += 1;
-                self.ensure_cursor_validity();
+                self.ensure_indices_validity();
                 self.clear_selection();
             }
 
@@ -954,7 +966,7 @@ impl TextInput {
                     if let Some((_, c)) = self.text[self.cursor_index..].char_indices().next() {
                         let char_len = c.len_utf8();
                         self.text.replace_range(self.cursor_index..self.cursor_index + char_len, "");
-                        self.ensure_cursor_validity();
+                        self.ensure_indices_validity();
                     }
                 }
                 self.last_key = Some(KeyCode::Delete);
@@ -964,7 +976,7 @@ impl TextInput {
                     if let Some((prev_offset, _c)) = self.text[..self.cursor_index].char_indices().rev().next() {
                         self.text.replace_range(prev_offset..self.cursor_index, "");
                         self.cursor_index = prev_offset;
-                        self.ensure_cursor_validity();
+                        self.ensure_indices_validity();
                     }
                 }
                 self.last_key = Some(KeyCode::Backspace);
@@ -978,7 +990,7 @@ impl TextInput {
                 } else if let Some((start, _end)) = self.get_selection_range() {
                     self.cursor_index = start;
                     self.clear_selection();
-                    self.ensure_cursor_validity();
+                    self.ensure_indices_validity();
                     collapse_only = true;
                     self.last_key = Some(KeyCode::Left);
                     self.key_repeat_timer = 0.0;
@@ -990,7 +1002,7 @@ impl TextInput {
                     let prev_char = self.text[..self.cursor_index].chars().last().unwrap();
                     let char_len = prev_char.len_utf8();
                     self.cursor_index -= char_len;
-                    self.ensure_cursor_validity();
+                    self.ensure_indices_validity();
                     self.last_key = Some(KeyCode::Left);
                     self.key_repeat_timer = 0.0;
                     self.preferred_col = None;
@@ -1004,7 +1016,7 @@ impl TextInput {
                 } else if let Some((_start, end)) = self.get_selection_range() {
                     self.cursor_index = end;
                     self.clear_selection();
-                    self.ensure_cursor_validity();
+                    self.ensure_indices_validity();
                     collapse_only = true;
                     self.last_key = Some(KeyCode::Right);
                     self.key_repeat_timer = 0.0;
@@ -1016,7 +1028,7 @@ impl TextInput {
                     let next_char = self.text[self.cursor_index..].chars().next().unwrap();
                     let char_len = next_char.len_utf8();
                     self.cursor_index += char_len;
-                    self.ensure_cursor_validity();
+                    self.ensure_indices_validity();
                     self.last_key = Some(KeyCode::Right);
                     self.key_repeat_timer = 0.0;
                     self.preferred_col = None;
@@ -1063,10 +1075,10 @@ impl TextInput {
                     }
                     if let Some(byte_idx) = last_match {
                         self.cursor_index = byte_idx;
-                        self.ensure_cursor_validity();
+                        self.ensure_indices_validity();
                     } else {
                         self.cursor_index = self.text.len();
-                        self.ensure_cursor_validity();
+                        self.ensure_indices_validity();
                     }
                 }
                 // Reset preferred_col if left/right or typing
@@ -1095,7 +1107,7 @@ impl TextInput {
                                     let prev_char = self.text[..self.cursor_index].chars().last().unwrap();
                                     let char_len = prev_char.len_utf8();
                                     self.cursor_index -= char_len;
-                                    self.ensure_cursor_validity();
+                                    self.ensure_indices_validity();
                                 }
                             }
                             KeyCode::Right => {
@@ -1111,7 +1123,7 @@ impl TextInput {
                                     let next_char = self.text[self.cursor_index..].chars().next().unwrap();
                                     let char_len = next_char.len_utf8();
                                     self.cursor_index += char_len;
-                                    self.ensure_cursor_validity();
+                                    self.ensure_indices_validity();
                                 }
                             }
                             KeyCode::Delete => {
@@ -1119,7 +1131,7 @@ impl TextInput {
                                     if let Some((_, c)) = self.text[self.cursor_index..].char_indices().next() {
                                         let char_len = c.len_utf8();
                                         self.text.replace_range(self.cursor_index..self.cursor_index + char_len, "");
-                                        self.ensure_cursor_validity();
+                                        self.ensure_indices_validity();
                                     }
                                 }
                             }
@@ -1128,7 +1140,7 @@ impl TextInput {
                                     if let Some((prev_offset, _c)) = self.text[..self.cursor_index].char_indices().rev().next() {
                                         self.text.replace_range(prev_offset..self.cursor_index, "");
                                         self.cursor_index = prev_offset;
-                                        self.ensure_cursor_validity();
+                                        self.ensure_indices_validity();
                                     }
                                 }
                             }
@@ -1171,7 +1183,7 @@ impl TextInput {
                                 self.cursor_index += c.len_utf8();
                             }
                         }
-                        self.ensure_cursor_validity();
+                        self.ensure_indices_validity();
                         self.clear_selection();
                         self.paste_requested = false;
                     }
