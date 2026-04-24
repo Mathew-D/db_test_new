@@ -60,7 +60,7 @@ async fn main() {
     let btn_add = TextButton::new(380.0, 20.0, 120.0, 36.0, "Add", DARKBLUE, BLUE, 22);
     let btn_delete = TextButton::new(510.0, 20.0, 120.0, 36.0, "Delete", MAROON, RED, 22);
     let btn_update = TextButton::new(640.0, 60.0, 120.0, 36.0, "Update", DARKGREEN, GREEN, 22);
-    let mut list_view = ListView::new(&Vec::<String>::new(), 15.0, 70.0, 22);
+    let mut list_view = ListView::new(&Vec::<String>::new(), 15.0, 80.0, 22);
     list_view.with_colors(WHITE, None, Some(DARKGRAY)).with_max_visible_items(20);
     let mut lbl_status = Label::new(&status, 380.0, 80.0, 20);
     lbl_status.with_colors(YELLOW, None);
@@ -71,7 +71,7 @@ async fn main() {
         Ok(records) => update_listview(&mut list_view, &records),
         Err(e) => status = format!("Fetch error on startup: {}", e),
     }
-
+list_view.with_border(WHITE, 5.0);
     loop {
         clear_background(BLACK);
 
