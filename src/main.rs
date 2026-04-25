@@ -1,4 +1,3 @@
-use crate::modules::textfiles::TextFile;
 /*
 By: <Mahew Dusome>
 Date: 2026-03-30
@@ -12,6 +11,7 @@ use crate::modules::label::Label;
 use crate::modules::listview::ListView;
 use crate::modules::text_button::TextButton;
 use crate::modules::text_input::TextInput;
+use crate::modules::textfiles::TextFile;
 use macroquad::prelude::*;
 
 /// Set up window settings before the app runs
@@ -44,8 +44,13 @@ async fn main() {
     // Add buttons for TextFile save/load test
     let btn_textfile_save = TextButton::new(780.0, 20.0, 90.0, 36.0, "Save File", DARKGRAY, GRAY, 18);
     let btn_textfile_load = TextButton::new(890.0, 20.0, 90.0, 36.0, "Load File", DARKGRAY, GRAY, 18);
+   
+   
     let client = create_database_client();
     let table_name = "messages";
+   
+   
+   
     let mut status = "Startup".to_string();
 
     // Text input for user to set text
@@ -62,16 +67,20 @@ async fn main() {
     let btn_update = TextButton::new(640.0, 60.0, 120.0, 36.0, "Update", DARKGREEN, GREEN, 22);
     let mut list_view = ListView::new(&Vec::<String>::new(), 15.0, 80.0, 22);
     list_view.with_colors(WHITE, None, Some(DARKGRAY)).with_max_visible_items(20);
-    let mut lbl_status = Label::new(&status, 380.0, 80.0, 20);
-    lbl_status.with_colors(YELLOW, None);
+
+    let mut lbl_status = TextInput::new(380.0, 100.0, 300.0, 300.0, 25.0);
+
+    //   let mut lbl_status = Label::new(&status, 380.0, 80.0, 20);
+    lbl_status.set_text_color(YELLOW);
+    lbl_status.set_multiline(true);
     let mut lbl_file_status = Label::new("", 780.0, 260.0, 18);
     lbl_file_status.with_colors(WHITE, None);
     // Initial fetch
-    match client.fetch_table(table_name).await {
+    match client.fetch_table::<DatabaseTable>(table_name).await {
         Ok(records) => update_listview(&mut list_view, &records),
-        Err(e) => status = format!("Fetch error on startup: {}", e),
+        Err(e) => status = format!("Fetch error on startup:\n {}", e),
     }
-list_view.with_border(WHITE, 5.0);
+    list_view.with_border(WHITE, 5.0);
     loop {
         clear_background(BLACK);
 
@@ -110,7 +119,7 @@ list_view.with_border(WHITE, 5.0);
             if !text.trim().is_empty() {
                 let new_record = DatabaseTable { id: 0, text: text.clone() };
                 if let Ok(_id) = client.insert_record(table_name, &new_record).await {
-                    if let Ok(records) = client.fetch_table(table_name).await {
+                    if let Ok(records) = client.fetch_table::<DatabaseTable>(table_name).await {
                         update_listview(&mut list_view, &records);
                         status = "Added record".to_string();
                         txt_input.set_text("");
@@ -130,7 +139,7 @@ list_view.with_border(WHITE, 5.0);
             let id_text = txt_delete_id.get_text();
             if let Ok(id) = id_text.trim().parse::<i64>() {
                 let mut found = false;
-                if let Ok(records) = client.fetch_table(table_name).await {
+                if let Ok(records) = client.fetch_table::<DatabaseTable>(table_name).await {
                     for record in records.iter() {
                         if record.id == id as i32 {
                             found = true;
@@ -139,7 +148,7 @@ list_view.with_border(WHITE, 5.0);
                 }
                 if found {
                     if let Ok(_count) = client.delete_record_by_id(table_name, id).await {}
-                    if let Ok(records) = client.fetch_table(table_name).await {
+                    if let Ok(records) = client.fetch_table::<DatabaseTable>(table_name).await {
                         update_listview(&mut list_view, &records);
                         status = format!("Deleted record with ID {}", id);
                         txt_delete_id.set_text("");
@@ -165,7 +174,7 @@ list_view.with_border(WHITE, 5.0);
                         text: new_text.clone(),
                     };
                     if let Ok(_updated_count) = client.update_record_by_struct("messages", &updated_record).await {
-                        if let Ok(records) = client.fetch_table(table_name).await {
+                        if let Ok(records) = client.fetch_table::<DatabaseTable>(table_name).await {
                             update_listview(&mut list_view, &records);
                             status = format!("Updated record with ID {}", id);
                         } else {

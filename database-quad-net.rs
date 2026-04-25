@@ -25,10 +25,11 @@ INITIAL SETUP:
    ureq = { version = "2.9", features = ["json"] }
    
 8. Add use statement:
-    use crate::utils::database::{create_database_client, DatabaseTable};
+    use crate::modules::database::{create_database_client, DatabaseTable};
 9. Add to mod.rs:
     pub mod database;
-
+10. To build for web: Use "Build: Web Output(Advanced)" option in the Dusome's extension.
+   This will compile to WebAssembly with the wasm32 dependencies above.
 
 ================================
 CUSTOMIZE YOUR DATABASE SCHEMA:
@@ -65,7 +66,8 @@ USAGE EXAMPLES:
 // NOTE: The table used in these examples is called 'messages'.
     let client = create_database_client();
 
-// Fetch all records (for display)
+
+    // Fetch all records (for display)
     let mut records: Vec<DatabaseTable> = Vec::new();
     let fetched_results = client.fetch_table("messages").await;
     if let Ok(result) = fetched_results {
@@ -73,54 +75,22 @@ USAGE EXAMPLES:
        // To update a ListView with these records:
         // update_listview(&mut list_view, &records);
         }
-    } else {
-       println!("Error fetching records from database: {} ",fetched_results.err().unwrap());
-    }
-
-     if let Ok(Some(record)) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
-                println!("Successfully fetched record from database.");
-      else if let Ok(None) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
-                println!("No record found with id {}", id);
-      } else if let Err(err) = client.fetch_record_by_id::<DatabaseTable>("message", id).await {
-                println!("Error fetching record from database: {}", err);
-      }
-
-// Insert a record (from user text input)
-    let new_record = DatabaseTable { id: 0, text: "User entered text".to_string() };
-    let insert_results =  client.insert_record("messages", &new_record).await;
-    if let Ok(id) = insert_results {
-        // Inserted, id contains the new record's id
-    } else {
-        println!("Error inserting records from database: {} ",insert_results.err().unwrap());
-    }
-
-
-// Update a record by id (Can only do one column at a time with this method)
-    if let Ok(updated_count) = client.update_record_by_id("messages", 5, "text", "New text").await {
-        // updated_count is the number of records updated
-    } else {
-        // Handle error
-    }
-
-// Update a record by struct (update all non-id fields)
-    let updated_record = DatabaseTable { id: 5, text: "Updated text".to_string() };
-    if let Ok(updated_count) = client.update_record_by_struct("messages", &updated_record).await {
-        // updated_count is the number of records updated
-    } else {
-        // Handle error
-    }
-
-// Delete a record by id (from user id input)
-    if let Ok(deleted_count) = client.delete_record_by_id("messages", 5).await {
         // deleted_count is the number of records deleted
     } else {
         // Handle error
     }
 
+    // Custom SQL queries
+    if let Ok(_) = client.execute_sql("SELECT * FROM messages WHERE id > 5").await {
+        // Query executed
+    } else {
+        // Handle error
+    }
 
-// Displaying records in a ListView:
-//Where 'list_view' is your ListView instance and 'records' is the Vec<DatabaseTable> fetched from the database.
-//Change the items.push! line to customize how each record is displayed in the list.
+  // ---
+    // Displaying records in a ListView:
+    //Where 'list_view' is your ListView instance and 'records' is the Vec<DatabaseTable> fetched from the database.
+    //Change the items.push! line to customize how each record is displayed in the list.
    
    fn update_listview(list_view: &mut ListView, messages: &Vec<DatabaseTable>) {
     list_view.clear();
@@ -133,16 +103,13 @@ USAGE EXAMPLES:
 */
 
 use serde::{Deserialize, Serialize};
-#[cfg(not(target_arch = "wasm32"))]
-use ureq;
-#[cfg(target_arch = "wasm32")]
-use macroquad::prelude::next_frame;
+use quad_net::http_request::{RequestBuilder, Method};
 
 // Helper function for serde to skip serializing id when it's 0
 fn is_zero(num: &i32) -> bool {
     *num == 0
 }
-
+// Please replace the libsql:// from the URL with https:
 // URL of your Cloudflare Worker backend
 pub const WORKER_URL: &str = "https://db-worker.mathew-dusome.workers.dev";
 
@@ -259,65 +226,21 @@ impl DatabaseClient {
         }
 
         async fn send_request(&self, payload: &serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-            let body = payload.to_string();
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let url = &self.worker_url;
-                let response = ureq::post(url)
-                    .set("Content-Type", "application/json")
-                    .send_string(&body);
-                let text = match response {
-                    Ok(resp) => resp.into_string()?,
-                    Err(ureq::Error::Status(code, resp)) => {
-                        let err_body = resp.into_string().unwrap_or_else(|_| "Could not read error body".to_string());
-                        return Err(format!("HTTP {} error: {}", code, err_body).into());
-                    }
-                    Err(e) => return Err(e.into()),
-                };
-                let json: serde_json::Value = serde_json::from_str(&text)?;
-                Ok(json)
-            }
-            #[cfg(target_arch = "wasm32")]
-            {
-                extern "C" {
-                    fn mq_db_query(ptr: *const u8, len: usize, url_ptr: *const u8, url_len: usize);
-                    fn mq_db_query_result_len() -> usize;
-                    fn mq_db_query_fill_result(ptr: *mut u8);
-                    fn mq_db_query_clear_result();
+            // Use quad-net http_request for HTTP requests on all platforms
+            let mut request = RequestBuilder::new(&self.worker_url)
+                .method(Method::Post)
+                .header("Content-Type", "application/json")
+                .body(&payload.to_string())
+                .send();
+
+            // Poll the request until we get a response
+            loop {
+                if let Some(result) = request.try_recv() {
+                    let text = result.map_err(|e| format!("HTTP error: {}", e))?;
+                    let json: serde_json::Value = serde_json::from_str(&text)?;
+                    return Ok(json);
                 }
-                let url_bytes = self.worker_url.as_bytes();
-                let json_bytes = body.as_bytes();
-                // Call JS: mq_db_query(ptr, len, url_ptr, url_len)
-                unsafe {
-                    mq_db_query(
-                        json_bytes.as_ptr(),
-                        json_bytes.len(),
-                        url_bytes.as_ptr(),
-                        url_bytes.len(),
-                    );
-                }
-                let mut tries = 0;
-                let max_tries = 100;
-                let mut result_len = 0;
-                while tries < max_tries {
-                    result_len = unsafe { mq_db_query_result_len() };
-                    if result_len > 0 {
-                        break;
-                    }
-                    tries += 1;
-                    next_frame().await;
-                }
-                if result_len == 0 {
-                    return Err("No result from JS db_query (timeout or JS error)".into());
-                }
-                let mut buf = vec![0u8; result_len];
-                unsafe {
-                    mq_db_query_fill_result(buf.as_mut_ptr());
-                    mq_db_query_clear_result();
-                }
-                let text = String::from_utf8(buf).map_err(|e| format!("UTF-8 error: {}", e))?;
-                let json: serde_json::Value = serde_json::from_str(&text)?;
-                Ok(json)
+                macroquad::prelude::next_frame().await;
             }
         }
     pub fn new(worker_url: String) -> Self {

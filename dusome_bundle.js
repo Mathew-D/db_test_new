@@ -91,25 +91,22 @@ miniquad_add_plugin({
 
 let db_query_result_buffer = "";
 
-async function mq_db_query(ptr, len, url_ptr, url_len, token_ptr, token_len) {
+async function mq_db_query(ptr, len, url_ptr, url_len) {
     // WASM memory is expected to be available as wasm_memory
     try {
         const mem = wasm_memory.buffer;
         const decoder = new TextDecoder();
         const body = decoder.decode(new Uint8Array(mem, ptr, len));
         const url = decoder.decode(new Uint8Array(mem, url_ptr, url_len));
-        const token = decoder.decode(new Uint8Array(mem, token_ptr, token_len));
 
-        const resp = await fetch(url + "/v2/pipeline", {
+        const resp = await fetch(url, {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json"
             },
             body
         });
         db_query_result_buffer = await resp.text();
-    
     } catch (e) {
         db_query_result_buffer = JSON.stringify({ error: "fetch_failed", message: e && e.message ? e.message : String(e) });
     }
