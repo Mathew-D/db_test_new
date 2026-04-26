@@ -216,6 +216,7 @@ pub struct DatabaseClient {
 }
 
 impl DatabaseClient {
+        #[allow(unused)]    
         pub async fn insert_record<T: Serialize>(&self, table: &str, record: &T) -> Result<i64, Box<dyn std::error::Error>> {
             let payload = serde_json::json!({
                 "action": "insert",
@@ -226,6 +227,7 @@ impl DatabaseClient {
             Ok(resp["id"].as_i64().unwrap_or(0))
         }
 
+        #[allow(unused)]
         pub async fn update_record_by_struct<T: Serialize>(&self, table: &str, record: &T) -> Result<i64, Box<dyn std::error::Error>> {
             let payload = serde_json::json!({
                 "action": "update",
@@ -236,6 +238,7 @@ impl DatabaseClient {
             Ok(resp["updated"].as_i64().unwrap_or(0))
         }
 
+        #[allow(unused)]
         pub async fn update_record_by_id(&self, table: &str, id: i64, column: &str, value: &serde_json::Value) -> Result<i64, Box<dyn std::error::Error>> {
             let payload = serde_json::json!({
                 "action": "update_by_column",
@@ -248,6 +251,7 @@ impl DatabaseClient {
             Ok(resp["updated"].as_i64().unwrap_or(0))
         }
 
+        #[allow(unused)]
         pub async fn delete_record_by_id(&self, table: &str, id: i64) -> Result<i64, Box<dyn std::error::Error>> {
             let payload = serde_json::json!({
                 "action": "delete",
@@ -257,7 +261,8 @@ impl DatabaseClient {
             let resp = self.send_request(&payload).await?;
             Ok(resp["deleted"].as_i64().unwrap_or(0))
         }
-
+        
+        #[allow(unused)]
         async fn send_request(&self, payload: &serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
             let body = payload.to_string();
             #[cfg(not(target_arch = "wasm32"))]
