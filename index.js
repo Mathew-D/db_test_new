@@ -179,7 +179,7 @@ export default {
 
       case 'insert':
         return new Response(JSON.stringify({
-          id: dbRes.result?.step_results?.[0]?.last_insert_rowid ?? 0
+         success: (dbRes.result?.step_results?.[0]?.rows_affected ?? 0) > 0
         }), { status: 200, headers: corsHeaders });
 
       case 'update':
