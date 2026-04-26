@@ -3,6 +3,7 @@
 👉 Click “Sign up with GitHub”
 
 🌐 STEP 2 — Enable Workers access
+Click Compute
 Click Workers & Pages
 If asked, create a workers.dev subdomain
 (example: student-games)
@@ -12,25 +13,18 @@ You will get:
 https://your-worker.student-games.workers.dev
 🧱 STEP 3 — Create a Worker
 Click “Create Application”
-Choose “Create Worker”
-Click “Deploy” (default template)
+Choose "Start with Hello World!"
+Paste the following Inside your Worker:
 
-Now you have a live Worker.
-
-🧠 STEP 4 — Open the code editor
-
-Inside your Worker:
-
-👉 Click “Edit code”
-
-You will see something like:
+👉 You will see something like:
 
 export default {
   async fetch(request, env) {
     return new Response("Hello World");
   }
 };
-🧠 STEP 5 — Replace with your API code
+
+🧠 Replace with your API code
 
 Delete everything and paste:
 
@@ -265,7 +259,7 @@ function wrap_param(val) {
 }
 
 
-Click Save + Deploy
+Click Deploy
 
 🔐 STEP 6 — Add database credentials
 
